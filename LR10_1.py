@@ -1007,95 +1007,128 @@ class MainWindow(QtWidgets.QMainWindow):
     def _toggle_print_mode(self):
         """Переключает режим печати и перерисовывает текущую диаграмму в черно-белом режиме"""
         if self.last_eye_params is not None:
-            # Перерисовываем с сохраненными параметрами, но в нужном режиме
-            self._redraw_eye_diagram()
+            # Блокируем интерфейс и показываем прогресс-бар
+            self.set_controls_enabled(False)
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setValue(0)
+
+            # Используем QTimer для асинхронной перерисовки
+            QtCore.QTimer.singleShot(100, self._do_redraw_eye_diagram)
+
+    def _do_redraw_eye_diagram(self):
+        """Асинхронная перерисовка глаз-диаграммы"""
+        self._redraw_eye_diagram()
 
     def _redraw_eye_diagram(self):
         """Перерисовывает глаз-диаграмму с текущими параметрами и учетом режима печати"""
         if self.last_eye_params is None:
+            self._finish_processing()
             return
 
-        # Получаем сохраненные параметры
-        phase = self.last_eye_params['phase']
-        phase_op = self.last_eye_params['phase_op']
-        noise_std = self.last_eye_params['noise_std']
-        num_realizations = self.last_eye_params['num_realizations']
+        try:
+            # Получаем сохраненные параметры
+            phase = self.last_eye_params['phase']
+            phase_op = self.last_eye_params['phase_op']
+            noise_std = self.last_eye_params['noise_std']
+            num_realizations = self.last_eye_params['num_realizations']
 
-        # Проверяем режим печати
-        print_mode = self.print_mode_checkbox.isChecked()
+            self.progress_bar.setValue(10)
+            QtWidgets.QApplication.processEvents()
 
-        # Основные параметры
-        fs = self.fs
-        pn_rate = self.пс_частота
-        N = self.N
+            # Проверяем режим печати
+            print_mode = self.print_mode_checkbox.isChecked()
 
-        # Временные параметры для сегмента
-        start_time = 0.035
-        end_time = 2.2
+            # Основные параметры
+            fs = self.fs
+            pn_rate = self.пс_частота
+            N = self.N
 
-        start_idx = int(start_time * fs)
-        end_idx = int(end_time * fs)
+            # Временные параметры для сегмента
+            start_time = 0.035
+            end_time = 2.2
 
-        samples_per_symbol = int(fs / pn_rate)
-        t_symbol = np.linspace(0, 1 / pn_rate, samples_per_symbol, endpoint=False)
+            start_idx = int(start_time * fs)
+            end_idx = int(end_time * fs)
 
-        ax = self.eye_canvas.ax
-        ax.clear()
+            samples_per_symbol = int(fs / pn_rate)
+            t_symbol = np.linspace(0, 1 / pn_rate, samples_per_symbol, endpoint=False)
 
-        for realization_idx in range(num_realizations):
-            # 1. Генерация несущей с заданной фазой
-            sinusoid_1 = generate_sinusoid(self.частота_опорного, phase, fs, N)
+            ax = self.eye_canvas.ax
+            ax.clear()
 
-            # 2. Модуляция (умножение ПСП на несущую)
-            multiplied_signal = self.pn_sequence * sinusoid_1
+            self.progress_bar.setValue(20)
+            QtWidgets.QApplication.processEvents()
 
-            # 3. Добавление шума
-            noisy_signal = add_gaussian_noise(multiplied_signal, noise_std, 0)
+            for realization_idx in range(num_realizations):
+                # Обновляем прогресс каждые 10% реализаций
+                if realization_idx % max(1, num_realizations // 10) == 0:
+                    progress = 20 + int(70 * realization_idx / num_realizations)
+                    self.progress_bar.setValue(progress)
+                    QtWidgets.QApplication.processEvents()
 
-            # 4. Генерация опорного колебания
-            reference_oscillation = generate_sinusoid(self.частота_опорного, phase_op, fs, N)
+                # 1. Генерация несущей с заданной фазой
+                sinusoid_1 = generate_sinusoid(self.частота_опорного, phase, fs, N)
 
-            # 5. Демодуляция (перемножение)
-            mixed_signal = noisy_signal * reference_oscillation
+                # 2. Модуляция (умножение ПСП на несущую)
+                multiplied_signal = self.pn_sequence * sinusoid_1
 
-            # 6. Фильтрация ФНЧ
-            filtered_signal = butter_lowpass_filter(mixed_signal, self.фильтр_срез, fs, order=3)
+                # 3. Добавление шума
+                noisy_signal = add_gaussian_noise(multiplied_signal, noise_std, 0)
 
-            # 7. Выделение сегмента для глаз-диаграммы
-            filtered_signal_segment = filtered_signal[start_idx:end_idx]
+                # 4. Генерация опорного колебания
+                reference_oscillation = generate_sinusoid(self.частота_опорного, phase_op, fs, N)
 
-            # 8. Построение глаз-диаграммы
-            for i in range(0, len(filtered_signal_segment) - samples_per_symbol, samples_per_symbol):
-                if print_mode:
-                    # Режим для печати - серый цвет
-                    # Вариант: градиент серого (от светлого к темному)
-                    gray_intensity = 0.3 + (i / (len(filtered_signal_segment) - samples_per_symbol)) * 0.5
-                    ax.plot(t_symbol, filtered_signal_segment[i:i + samples_per_symbol],
-                            color=(gray_intensity, gray_intensity, gray_intensity),
-                            linewidth=0.5, alpha=0.5)
-                else:
-                    # Обычный режим - цветной (viridis)
-                    color = plt.cm.viridis(realization_idx / num_realizations)
-                    ax.plot(t_symbol, filtered_signal_segment[i:i + samples_per_symbol],
-                            color=color, linewidth=0.5)
+                # 5. Демодуляция (перемножение)
+                mixed_signal = noisy_signal * reference_oscillation
 
-        # Настройка графика
-        ax.set_title('Глаз-диаграмма')
-        ax.set_xlabel('Время [с]')
-        ax.set_ylabel('')
-        ax.tick_params(axis='both', which='major', labelsize=14)
-        ax.tick_params(axis='both', which='minor', labelsize=10)
-        ax.grid(True)
+                # 6. Фильтрация ФНЧ
+                filtered_signal = butter_lowpass_filter(mixed_signal, self.фильтр_срез, fs, order=3)
 
-        ax.axhline(y=0, color='red' if not print_mode else 'black',
-                   linewidth=3, linestyle='-', alpha=0.5)
+                # 7. Выделение сегмента для глаз-диаграммы
+                filtered_signal_segment = filtered_signal[start_idx:end_idx]
 
-        # Убрать отступы
-        ax.autoscale(enable=True, axis='x', tight=True)
-        ax.set_xlim(left=0)
+                # 8. Построение глаз-диаграммы
+                for i in range(0, len(filtered_signal_segment) - samples_per_symbol, samples_per_symbol):
+                    if print_mode:
+                        # Режим для печати - градиент серого
+                        gray_intensity = 0.3 + (i / (len(filtered_signal_segment) - samples_per_symbol)) * 0.5
+                        ax.plot(t_symbol, filtered_signal_segment[i:i + samples_per_symbol],
+                                color=(gray_intensity, gray_intensity, gray_intensity),
+                                linewidth=0.5, alpha=0.5)
+                    else:
+                        # Обычный режим - цветной (viridis)
+                        color = plt.cm.viridis(realization_idx / num_realizations)
+                        ax.plot(t_symbol, filtered_signal_segment[i:i + samples_per_symbol],
+                                color=color, linewidth=0.5)
 
-        self.eye_canvas.draw()
+            self.progress_bar.setValue(95)
+            QtWidgets.QApplication.processEvents()
 
+            # Настройка графика
+            ax.set_title('Глаз-диаграмма')
+            ax.set_xlabel('Время [с]')
+            ax.set_ylabel('')
+            ax.tick_params(axis='both', which='major', labelsize=14)
+            ax.tick_params(axis='both', which='minor', labelsize=10)
+            ax.grid(True)
+
+            ax.axhline(y=0, color='red' if not print_mode else 'black',
+                       linewidth=3, linestyle='-', alpha=0.5)
+
+            # Убрать отступы
+            ax.autoscale(enable=True, axis='x', tight=True)
+            ax.set_xlim(left=0)
+
+            self.eye_canvas.draw()
+            self.progress_bar.setValue(100)
+            QtWidgets.QApplication.processEvents()
+
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Ошибка",
+                                           f"Ошибка при перерисовке глаз-диаграммы:\n{str(e)}")
+        finally:
+            # Разблокируем интерфейс после завершения
+            QtCore.QTimer.singleShot(300, self._finish_processing)
     # ---------- Рисуем блок-схему в QGraphicsScene
     # ---------- Рисуем блок-схему в QGraphicsScene (новая, аккуратная)
     def _draw_block_diagram(self):

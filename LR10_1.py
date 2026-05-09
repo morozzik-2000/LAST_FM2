@@ -464,66 +464,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # Сцена схемы блоков (будет размещена в параметрах)
         self._draw_block_diagram()
 
-        # Прогресс-бар
-        self.progress_bar = QtWidgets.QProgressBar()
-        self.progress_bar.setVisible(False)  # Скрыт по умолчанию
-        self.progress_bar.setStyleSheet("""
-                    QProgressBar {
-                        border: 2px solid gray;
-                        border-radius: 5px;
-                        text-align: center;
-                        font-weight: bold;
-                    }
-                    QProgressBar::chunk {
-                        background-color: #4CAF50;
-                        border-radius: 3px;
-                    }
-                """)
-        layout.addWidget(self.progress_bar)
-
         # Первичная генерация сигналов
-        # self._generate_all_signals()
-        # self._update_all_plots()
+        self._generate_all_signals()
+        self._update_all_plots()
 
-    def set_controls_enabled(self, enabled):
-        """Блокирует/разблокирует элементы управления"""
-        # Блокируем все вкладки
-        self.tab_params.setEnabled(enabled)
-        self.part1_tabs.setEnabled(enabled)
-        self.tab_eye.setEnabled(enabled)
-        self.tab_tradeoff.setEnabled(enabled)
-
-        # Блокируем кнопки на вкладке параметров
-        if hasattr(self, 'input_fs'):
-            self.input_fs.setEnabled(enabled)
-            self.input_T.setEnabled(enabled)
-            self.input_pn.setEnabled(enabled)
-            self.input_freq.setEnabled(enabled)
-            self.input_phase.setEnabled(enabled)
-            self.input_phase_op.setEnabled(enabled)
-            self.input_noise.setEnabled(enabled)
-            self.input_cut.setEnabled(enabled)
-
-        # Находим и блокируем кнопку "Применить параметры"
-        for widget in self.findChildren(QtWidgets.QPushButton):
-            if widget.text() == 'Применить параметры и пересчитать':
-                widget.setEnabled(enabled)
-
-        # Блокируем кнопки на вкладке глаз-диаграммы
-        if hasattr(self, 'eye_phase'):
-            self.eye_phase.setEnabled(enabled)
-            self.eye_phase_op.setEnabled(enabled)
-            self.eye_noise.setEnabled(enabled)
-            self.eye_realizations.setEnabled(enabled)
-
-        # Находим кнопку "Пересчитать" на глаз-диаграмме
-        for widget in self.findChildren(QtWidgets.QPushButton):
-            if widget.text() == 'Пересчитать':
-                widget.setEnabled(enabled)
-
-        # Блокируем кнопки на вкладке tradeoff
-        if hasattr(self, 'tradeoff_tabs'):
-            self.tradeoff_tabs.setEnabled(enabled)
     # ---------- Построение вкладки Параметры
     def _build_params_tab(self):
         layout = QtWidgets.QVBoxLayout(self.tab_params)
@@ -1218,192 +1162,57 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scene = scene
 
     # ---------- Применение параметров
-    # def _on_apply_params(self):
-    #     self.fs = int(self.input_fs.value())
-    #     self.длительность = float(self.input_T.value())
-    #     self.пс_частота = int(self.input_pn.value())
-    #     self.частота_опорного = int(self.input_freq.value())
-    #     self.фаза = float(self.input_phase.value()) * np.pi / 180.0
-    #     self.фаза_оп = float(self.input_phase_op.value()) * np.pi / 180.0
-    #     self.шум_std = float(self.input_noise.value())
-    #     # self.дек_фактор = int(self.input_dec.value())
-    #     # Рассчитываем фактор децимации автоматически
-    #     if self.пс_частота > 0:
-    #         # Округляем до ближайшего целого
-    #         self.дек_фактор = int(round(self.fs / self.пс_частота))
-    #         # Гарантируем, что фактор децимации >= 1
-    #         self.дек_фактор = max(1, self.дек_фактор)
-    #     else:
-    #         self.дек_фактор = 1
-    #     self.фильтр_срез = float(self.input_cut.value())
-    #     self.N = int(self.длительность * self.fs)
-    #
-    #     self._generate_all_signals()
-    #     self._update_all_plots()
-    #     # self._update_error_stats()
-    #
-    # # ---------- Генерация сигналов
-    # def _generate_all_signals(self):
-    #     # Временная шкала
-    #     t = np.linspace(0, self.длительность, int(self.длительность * self.fs), endpoint=False)
-    #     self.t = t
-    #     N = len(t)
-    #
-    #     # ПСП
-    #     self.pn_sequence = generate_pn_sequence(N, self.пс_частота, [-1, 1], self.fs)
-    #
-    #     # Синус
-    #     self.sinusoid = generate_sinusoid(self.частота_опорного, self.фаза, self.fs, N)
-    #
-    #     # Модуляция
-    #     self.multiplied = self.pn_sequence * self.sinusoid
-    #
-    #     # Шум
-    #     self.noisy = add_gaussian_noise(self.multiplied, self.шум_std)
-    #
-    #     # Опорный генератор
-    #     self.reference = generate_sinusoid(self.частота_опорного, self.фаза_оп, self.fs, N)
-    #
-    #     # Перемножитель демодуляции
-    #     self.mixed = self.noisy * self.reference
-    #
-    #     # Фильтрация
-    #     self.filtered = butter_lowpass_filter(self.mixed, self.фильтр_срез, self.fs, order=5)
-    #
-    #     # Децимация
-    #     self.decimated = decimate(self.filtered, self.дек_фактор)
-    #     self.decimated_t = self.t[::self.дек_фактор]
-    #
-    #     # Решающее устройство
-    #     self.limited = limiter(self.decimated)
-    #
-    #     # BER
-    #     orig = self.pn_sequence[::self.дек_фактор][:len(self.limited)]
-    #     # Приведём значения оригинала к -1/1
-    #     orig_bits = np.where(orig >= 0, 1, -1)
-    #     errors = np.sum(orig_bits != self.limited)
-    #     total = len(self.limited)
-    #     self.ber = errors / total if total > 0 else 0.0
-    #
-    #     # Энергия бита и Eb/N0
-    #     signal_power = calculate_power(self.multiplied)
-    #     bit_rate = self.пс_частота
-    #     bit_energy = signal_power / bit_rate if bit_rate > 0 else 0
-    #     noise_power = calculate_power(self.noisy - self.multiplied)
-    #     bandwidth = self.fs / 2
-    #     if bandwidth > 0 and noise_power > 0:
-    #         noise_density = noise_power / bandwidth
-    #         # Добавляем проверку, чтобы избежать деления на ноль или очень маленькие числа
-    #         if noise_density > 1e-20 and bit_energy > 0:
-    #             eb_no = 10 * np.log10(bit_energy / noise_density)
-    #         else:
-    #             eb_no = -100  # или любое другое значение по умолчанию
-    #     else:
-    #         noise_density = 1e-12
-    #         eb_no = -100
-    #     self.eb_no = eb_no
     def _on_apply_params(self):
-        # Блокируем интерфейс и показываем прогресс-бар
-        self.set_controls_enabled(False)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        self.fs = int(self.input_fs.value())
+        self.длительность = float(self.input_T.value())
+        self.пс_частота = int(self.input_pn.value())
+        self.частота_опорного = int(self.input_freq.value())
+        self.фаза = float(self.input_phase.value()) * np.pi / 180.0
+        self.фаза_оп = float(self.input_phase_op.value()) * np.pi / 180.0
+        self.шум_std = float(self.input_noise.value())
+        # self.дек_фактор = int(self.input_dec.value())
+        # Рассчитываем фактор децимации автоматически
+        if self.пс_частота > 0:
+            # Округляем до ближайшего целого
+            self.дек_фактор = int(round(self.fs / self.пс_частота))
+            # Гарантируем, что фактор децимации >= 1
+            self.дек_фактор = max(1, self.дек_фактор)
+        else:
+            self.дек_фактор = 1
+        self.фильтр_срез = float(self.input_cut.value())
+        self.N = int(self.длительность * self.fs)
 
-        # Используем QTimer для имитации прогресса (или реального прогресса)
-        QtCore.QTimer.singleShot(100, self._do_apply_params)
+        self._generate_all_signals()
+        self._update_all_plots()
+        # self._update_error_stats()
 
-    def _do_apply_params(self):
-        """Реальная обработка параметров с обновлением прогресса"""
-        try:
-            # Шаг 1: Чтение параметров (10%)
-            self.progress_bar.setValue(10)
-            QtWidgets.QApplication.processEvents()  # Обновляем UI
-
-            self.fs = int(self.input_fs.value())
-            self.длительность = float(self.input_T.value())
-            self.пс_частота = int(self.input_pn.value())
-            self.частота_опорного = int(self.input_freq.value())
-            self.фаза = float(self.input_phase.value()) * np.pi / 180.0
-            self.фаза_оп = float(self.input_phase_op.value()) * np.pi / 180.0
-            self.шум_std = float(self.input_noise.value())
-
-            # Шаг 2: Расчет децимации (20%)
-            self.progress_bar.setValue(20)
-            QtWidgets.QApplication.processEvents()
-
-            if self.пс_частота > 0:
-                self.дек_фактор = int(round(self.fs / self.пс_частота))
-                self.дек_фактор = max(1, self.дек_фактор)
-            else:
-                self.дек_фактор = 1
-            self.фильтр_срез = float(self.input_cut.value())
-            self.N = int(self.длительность * self.fs)
-
-            # Шаг 3: Генерация сигналов (30-80%)
-            self.progress_bar.setValue(30)
-            QtWidgets.QApplication.processEvents()
-
-            self._generate_all_signals_with_progress()
-
-            # Шаг 4: Обновление графиков (90%)
-            self.progress_bar.setValue(90)
-            QtWidgets.QApplication.processEvents()
-
-            self._update_all_plots()
-
-            # Завершение
-            self.progress_bar.setValue(100)
-            QtWidgets.QApplication.processEvents()
-
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "Ошибка", f"Ошибка при моделировании:\n{str(e)}")
-
-        finally:
-            # Разблокируем интерфейс и скрываем прогресс-бар
-            QtCore.QTimer.singleShot(500, self._finish_processing)
-
-    def _generate_all_signals_with_progress(self):
-        """Генерация сигналов с обновлением прогресса"""
-        # Временная шкала (30%)
+    # ---------- Генерация сигналов
+    def _generate_all_signals(self):
+        # Временная шкала
         t = np.linspace(0, self.длительность, int(self.длительность * self.fs), endpoint=False)
         self.t = t
         N = len(t)
-        self.progress_bar.setValue(35)
-        QtWidgets.QApplication.processEvents()
 
-        # ПСП (40%)
+        # ПСП
         self.pn_sequence = generate_pn_sequence(N, self.пс_частота, [-1, 1], self.fs)
-        self.progress_bar.setValue(45)
-        QtWidgets.QApplication.processEvents()
 
-        # Синус (50%)
+        # Синус
         self.sinusoid = generate_sinusoid(self.частота_опорного, self.фаза, self.fs, N)
-        self.progress_bar.setValue(55)
-        QtWidgets.QApplication.processEvents()
 
-        # Модуляция (60%)
+        # Модуляция
         self.multiplied = self.pn_sequence * self.sinusoid
-        self.progress_bar.setValue(65)
-        QtWidgets.QApplication.processEvents()
 
-        # Шум (70%)
+        # Шум
         self.noisy = add_gaussian_noise(self.multiplied, self.шум_std)
-        self.progress_bar.setValue(75)
-        QtWidgets.QApplication.processEvents()
 
-        # Опорный генератор (80%)
+        # Опорный генератор
         self.reference = generate_sinusoid(self.частота_опорного, self.фаза_оп, self.fs, N)
-        self.progress_bar.setValue(85)
-        QtWidgets.QApplication.processEvents()
 
-        # Перемножитель демодуляции (90%)
+        # Перемножитель демодуляции
         self.mixed = self.noisy * self.reference
-        self.progress_bar.setValue(95)
-        QtWidgets.QApplication.processEvents()
 
-        # Фильтрация (100%)
+        # Фильтрация
         self.filtered = butter_lowpass_filter(self.mixed, self.фильтр_срез, self.fs, order=5)
-        self.progress_bar.setValue(100)
-        QtWidgets.QApplication.processEvents()
 
         # Децимация
         self.decimated = decimate(self.filtered, self.дек_фактор)
@@ -1414,6 +1223,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # BER
         orig = self.pn_sequence[::self.дек_фактор][:len(self.limited)]
+        # Приведём значения оригинала к -1/1
         orig_bits = np.where(orig >= 0, 1, -1)
         errors = np.sum(orig_bits != self.limited)
         total = len(self.limited)
@@ -1427,20 +1237,15 @@ class MainWindow(QtWidgets.QMainWindow):
         bandwidth = self.fs / 2
         if bandwidth > 0 and noise_power > 0:
             noise_density = noise_power / bandwidth
+            # Добавляем проверку, чтобы избежать деления на ноль или очень маленькие числа
             if noise_density > 1e-20 and bit_energy > 0:
                 eb_no = 10 * np.log10(bit_energy / noise_density)
             else:
-                eb_no = -100
+                eb_no = -100  # или любое другое значение по умолчанию
         else:
             noise_density = 1e-12
             eb_no = -100
         self.eb_no = eb_no
-
-    def _finish_processing(self):
-        """Завершение обработки"""
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setValue(0)
-        self.set_controls_enabled(True)
 
     # ---------- Обновление всех графиков
     def _update_all_plots(self):

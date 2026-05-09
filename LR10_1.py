@@ -9,6 +9,80 @@ import matplotlib.pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 50  # Увеличиваем лимит
 
 
+# Добавьте этот класс-обертку для управления видимостью графиков
+class DualPlotWidget(QtWidgets.QWidget):
+    """Виджет с двумя графиками и возможностью скрывать/показывать каждый"""
+
+    def __init__(self, parent=None, title1="График 1", title2="График 2"):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        # Панель управления
+        control_panel = QtWidgets.QHBoxLayout()
+
+        self.show_top_checkbox = QtWidgets.QCheckBox("Показать верхний график")
+        self.show_top_checkbox.setChecked(True)
+        self.show_bottom_checkbox = QtWidgets.QCheckBox("Показать нижний график")
+        self.show_bottom_checkbox.setChecked(True)
+
+        control_panel.addWidget(self.show_top_checkbox)
+        control_panel.addWidget(self.show_bottom_checkbox)
+        control_panel.addStretch()
+
+        layout.addLayout(control_panel)
+
+        # Контейнер для графиков
+        self.plots_container = QtWidgets.QWidget()
+        self.plots_layout = QtWidgets.QVBoxLayout(self.plots_container)
+        self.plots_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Верхний график
+        self.top_canvas = MplCanvas(self, width=8, height=3)
+        self.top_toolbar = NavigationToolbar(self.top_canvas, self)
+        self.top_widget = QtWidgets.QWidget()
+        top_layout = QtWidgets.QVBoxLayout(self.top_widget)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.addWidget(self.top_canvas)
+        top_layout.addWidget(self.top_toolbar)
+
+        # Нижний график
+        self.bottom_canvas = MplCanvas(self, width=8, height=3)
+        self.bottom_toolbar = NavigationToolbar(self.bottom_canvas, self)
+        self.bottom_widget = QtWidgets.QWidget()
+        bottom_layout = QtWidgets.QVBoxLayout(self.bottom_widget)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.addWidget(self.bottom_canvas)
+        bottom_layout.addWidget(self.bottom_toolbar)
+
+        # Добавляем в контейнер
+        self.plots_layout.addWidget(self.top_widget)
+        self.plots_layout.addWidget(self.bottom_widget)
+
+        layout.addWidget(self.plots_container)
+
+        # Подключаем сигналы
+        self.show_top_checkbox.toggled.connect(self._on_top_visibility_changed)
+        self.show_bottom_checkbox.toggled.connect(self._on_bottom_visibility_changed)
+
+    def _on_top_visibility_changed(self, visible):
+        self.top_widget.setVisible(visible)
+
+    def _on_bottom_visibility_changed(self, visible):
+        self.bottom_widget.setVisible(visible)
+
+    def get_top_canvas(self):
+        return self.top_canvas
+
+    def get_bottom_canvas(self):
+        return self.bottom_canvas
+
+    def get_top_toolbar(self):
+        return self.top_toolbar
+
+    def get_bottom_toolbar(self):
+        return self.bottom_toolbar
+
 class FontDelegate(QtWidgets.QStyledItemDelegate):
     def __init__(self, font_size=14, parent=None):
         super().__init__(parent)
@@ -58,13 +132,6 @@ class TableInputDialog(QtWidgets.QDialog):
 
         delegate = FontDelegate(font_size=14)
         self.table.setItemDelegate(delegate)
-
-        # === НАСТРОЙКИ ДЛЯ ШРИФТА И ВЫРАВНИВАНИЯ ===
-        # Создаем шрифт для ячеек
-        # cell_font = QtGui.QFont()
-        # cell_font.setPointSize(14)  # Размер шрифта
-        # cell_font.setBold(False)  # Жирный или нет
-        # self.table.setFont(cell_font)
 
         # === НАСТРОЙКИ ДЛЯ ШРИФТА ЗАГОЛОВКОВ И НУМЕРАЦИИ ===
         # Увеличиваем шрифт для заголовков столбцов (горизонтальные)
@@ -299,11 +366,6 @@ def calculate_power(signal):
     return np.mean(signal**2)
 
 
-# def compute_psd(signal, fs, nperseg=1024):
-#
-#     f, Pxx = welch(signal, fs=fs, nperseg=nperseg)
-#     Pxx_db = 10 * np.log10(Pxx + 1e-20)
-#     return f, Pxx_db
 def compute_psd(signal, fs, nfft=2**16):
     # Zero-padding для гладкости
     Y = np.fft.fft(signal, n=nfft)
@@ -371,34 +433,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_eye = QtWidgets.QWidget()
         self.tab_tradeoff = QtWidgets.QWidget()  # ← ДОБАВЬТЕ ЭТУ СТРОКУ
 
-        # tabs.addTab(self.tab_params, 'Параметры')
-        # self.tab_part1 = QtWidgets.QWidget()
-        # tabs.addTab(self.tab_part1, 'Часть 1 (Моделирование)')
-        # # tabs.addTab(self.tab_psp, '2. ПСП')
-        # # tabs.addTab(self.tab_oporny, '3. Опорный сигнал')
-        # # tabs.addTab(self.tab_modulator, '4. Модулятор')
-        # # tabs.addTab(self.tab_channel, '5. Канал')
-        # # tabs.addTab(self.tab_demod, '6. Выход перемножителя')
-        # # tabs.addTab(self.tab_lpf, '7. ФНЧ')
-        # # tabs.addTab(self.tab_decim, '8. Децимация')
-        # # tabs.addTab(self.tab_decider, '9. Решающее устройство')
-        # # tabs.addTab(self.tab_compare, '10. Сравнение')
-        # tabs.addTab(self.tab_eye, 'Часть 2 (Глаз-диаграмма)')
-        # tabs.addTab(self.tab_tradeoff, 'Часть 3 (Построение графиков)')
-        #
-        # part1_layout = QtWidgets.QVBoxLayout(self.tab_part1)
-        # self.part1_tabs = QtWidgets.QTabWidget()
-        # part1_layout.addWidget(self.part1_tabs)
-        #
-        # self.part1_tabs.addTab(self.tab_psp, 'ПСП')
-        # self.part1_tabs.addTab(self.tab_oporny, 'Опорный сигнал')
-        # self.part1_tabs.addTab(self.tab_modulator, 'Модулятор')
-        # self.part1_tabs.addTab(self.tab_channel, 'Канал')
-        # self.part1_tabs.addTab(self.tab_demod, 'Выход перемножителя')
-        # self.part1_tabs.addTab(self.tab_lpf, 'ФНЧ')
-        # self.part1_tabs.addTab(self.tab_decim, 'Децимация')
-        # self.part1_tabs.addTab(self.tab_decider, 'Решающее устройство')
-        # self.part1_tabs.addTab(self.tab_compare, 'Сравнение')
         tabs.addTab(self.tab_params, 'Параметры')
         self.tab_part1 = QtWidgets.QWidget()
         tabs.addTab(self.tab_part1, 'Часть 1 (Моделирование)')
@@ -481,9 +515,6 @@ class MainWindow(QtWidgets.QMainWindow):
         """)
         layout.addWidget(self.progress_bar)
 
-        # Первичная генерация сигналов
-        # self._generate_all_signals()
-        # self._update_all_plots()
 
     def set_controls_enabled(self, enabled):
         """Блокирует/разблокирует элементы управления"""
@@ -527,15 +558,6 @@ class MainWindow(QtWidgets.QMainWindow):
     # ---------- Построение вкладки Параметры
     def _build_params_tab(self):
         layout = QtWidgets.QVBoxLayout(self.tab_params)
-
-        # # Заголовок
-        # title = QtWidgets.QLabel("Формирование и демодуляция сигналов ФМ2")
-        # title_font = QtGui.QFont()
-        # title_font.setPointSize(26)
-        # title_font.setBold(True)
-        # title.setFont(title_font)
-        # title.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        # layout.addWidget(title)
 
         # ---------- Группа для параметров с закруглённой рамкой
         group_box = QtWidgets.QGroupBox("Параметры моделирования")
@@ -637,16 +659,6 @@ class MainWindow(QtWidgets.QMainWindow):
         lbl_noise = QtWidgets.QLabel('СКО шума:')
         lbl_noise.setFont(label_font)
 
-
-        # Децимация
-        # self.input_dec = QtWidgets.QSpinBox()
-        # self.input_dec.setRange(1, 10000)
-        # self.input_dec.setValue(self.дек_фактор)
-        # self.input_dec.setFont(spin_font)
-        # lbl_dec = QtWidgets.QLabel('Фактор децимации:')
-        # lbl_dec.setFont(label_font)
-        # group_box_layout.addRow(lbl_dec, self.input_dec)
-
         # Частота среза ФНЧ
         self.input_cut = QtWidgets.QDoubleSpinBox()
         self.input_cut.setRange(0.1, 10000)
@@ -692,114 +704,82 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scene_view.setMinimumHeight(260)
         layout.addWidget(self.scene_view)
 
-    # ---------- ПСП вкладка
     def _build_psp_tab(self):
+        # Используем новый виджет с двумя управляемыми графиками
+        self.psp_dual = DualPlotWidget(self, title1="ПСП (временная)", title2="Спектр ПСП")
         layout = QtWidgets.QVBoxLayout(self.tab_psp)
+        layout.addWidget(self.psp_dual)
 
+        # Сохраняем ссылки на canvas для обратной совместимости
+        self.psp_canvas = self.psp_dual.get_top_canvas()
+        self.psp_psd_canvas = self.psp_dual.get_bottom_canvas()
+        self.psp_toolbar = self.psp_dual.get_top_toolbar()
+        self.psp_psd_toolbar = self.psp_dual.get_bottom_toolbar()
 
-        # графики: временная ПСП и PSD
-        self.psp_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.psp_canvas)
-        self.psp_toolbar = NavigationToolbar(self.psp_canvas, self)
-        layout.addWidget(self.psp_toolbar)
-
-        self.psp_psd_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.psp_psd_canvas)
-        self.psp_psd_toolbar = NavigationToolbar(self.psp_psd_canvas, self)
-        layout.addWidget(self.psp_psd_toolbar)
-
-    # ---------- Опорный сигнал вкладка
     def _build_oporny_tab(self):
+        self.op_dual = DualPlotWidget(self, title1="Опорный сигнал", title2="Спектр опорного")
         layout = QtWidgets.QVBoxLayout(self.tab_oporny)
+        layout.addWidget(self.op_dual)
 
-        self.op_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.op_canvas)
-        self.op_toolbar = NavigationToolbar(self.op_canvas, self)
-        layout.addWidget(self.op_toolbar)
+        self.op_canvas = self.op_dual.get_top_canvas()
+        self.op_psd_canvas = self.op_dual.get_bottom_canvas()
+        self.op_toolbar = self.op_dual.get_top_toolbar()
+        self.op_psd_toolbar = self.op_dual.get_bottom_toolbar()
 
-        self.op_psd_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.op_psd_canvas)
-        self.op_psd_toolbar = NavigationToolbar(self.op_psd_canvas, self)
-        layout.addWidget(self.op_psd_toolbar)
-
-    # ---------- Модулятор
     def _build_modulator_tab(self):
+        self.mod_dual = DualPlotWidget(self, title1="Модулированный сигнал", title2="Спектр модулированного")
         layout = QtWidgets.QVBoxLayout(self.tab_modulator)
+        layout.addWidget(self.mod_dual)
 
-        self.mod_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.mod_canvas)
-        self.mod_toolbar = NavigationToolbar(self.mod_canvas, self)
-        layout.addWidget(self.mod_toolbar)
+        self.mod_canvas = self.mod_dual.get_top_canvas()
+        self.mod_psd_canvas = self.mod_dual.get_bottom_canvas()
+        self.mod_toolbar = self.mod_dual.get_top_toolbar()
+        self.mod_psd_toolbar = self.mod_dual.get_bottom_toolbar()
 
-        self.mod_psd_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.mod_psd_canvas)
-        self.mod_psd_toolbar = NavigationToolbar(self.mod_psd_canvas, self)
-        layout.addWidget(self.mod_psd_toolbar)
-
-    # ---------- Канал
     def _build_channel_tab(self):
+        self.chan_dual = DualPlotWidget(self, title1="Сигнал на выходе канала", title2="Спектр сигнала")
         layout = QtWidgets.QVBoxLayout(self.tab_channel)
+        layout.addWidget(self.chan_dual)
 
-        self.chan_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.chan_canvas)
-        self.chan_toolbar = NavigationToolbar(self.chan_canvas, self)
-        layout.addWidget(self.chan_toolbar)
+        self.chan_canvas = self.chan_dual.get_top_canvas()
+        self.chan_psd_canvas = self.chan_dual.get_bottom_canvas()
+        self.chan_toolbar = self.chan_dual.get_top_toolbar()
+        self.chan_psd_toolbar = self.chan_dual.get_bottom_toolbar()
 
-        self.chan_psd_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.chan_psd_canvas)
-        self.chan_psd_toolbar = NavigationToolbar(self.chan_psd_canvas, self)
-        layout.addWidget(self.chan_psd_toolbar)
-
-    # ---------- Демодулятор
     def _build_demod_tab(self):
+        self.dem_dual = DualPlotWidget(self, title1="Выход перемножителя", title2="Спектр")
         layout = QtWidgets.QVBoxLayout(self.tab_demod)
+        layout.addWidget(self.dem_dual)
 
-        self.dem_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.dem_canvas)
-        self.dem_toolbar = NavigationToolbar(self.dem_canvas, self)
-        layout.addWidget(self.dem_toolbar)
+        self.dem_canvas = self.dem_dual.get_top_canvas()
+        self.dem_psd_canvas = self.dem_dual.get_bottom_canvas()
+        self.dem_toolbar = self.dem_dual.get_top_toolbar()
+        self.dem_psd_toolbar = self.dem_dual.get_bottom_toolbar()
 
-        self.dem_psd_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.dem_psd_canvas)
-        self.dem_psd_toolbar = NavigationToolbar(self.dem_psd_canvas, self)
-        layout.addWidget(self.dem_psd_toolbar)
-
-    # ---------- ФНЧ
     def _build_lpf_tab(self):
+        self.lpf_dual = DualPlotWidget(self, title1="Выход ФНЧ", title2="Спектр")
         layout = QtWidgets.QVBoxLayout(self.tab_lpf)
+        layout.addWidget(self.lpf_dual)
 
-        self.lpf_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.lpf_canvas)
-        self.lpf_toolbar = NavigationToolbar(self.lpf_canvas, self)
-        layout.addWidget(self.lpf_toolbar)
+        self.lpf_canvas = self.lpf_dual.get_top_canvas()
+        self.lpf_psd_canvas = self.lpf_dual.get_bottom_canvas()
+        self.lpf_toolbar = self.lpf_dual.get_top_toolbar()
+        self.lpf_psd_toolbar = self.lpf_dual.get_bottom_toolbar()
 
-        self.lpf_psd_canvas = MplCanvas(self, width=8, height=3)
-        layout.addWidget(self.lpf_psd_canvas)
-        self.lpf_psd_toolbar = NavigationToolbar(self.lpf_psd_canvas, self)
-        layout.addWidget(self.lpf_psd_toolbar)
-
-    # ---------- Децимация
-    # def _build_decim_tab(self):
-    #     layout = QtWidgets.QVBoxLayout(self.tab_decim)
-    #
-    #     self.dec_canvas = MplCanvas(self, width=10, height=4)
-    #     layout.addWidget(self.dec_canvas)
-    #     self.dec_toolbar = NavigationToolbar(self.dec_canvas, self)
-    #     layout.addWidget(self.dec_toolbar)
     def _build_decim_tab(self):
+        # Для вкладки децимации тоже можно сделать управление
+        self.dec_dual = DualPlotWidget(self, title1="Децимированный сигнал", title2="Наложение")
         layout = QtWidgets.QVBoxLayout(self.tab_decim)
+        layout.addWidget(self.dec_dual)
 
-        # Верхний график: децимированный сигнал (как было)
-        self.dec_canvas = MplCanvas(self, width=10, height=3)
-        layout.addWidget(self.dec_canvas)
-        self.dec_toolbar = NavigationToolbar(self.dec_canvas, self)
-        layout.addWidget(self.dec_toolbar)
+        self.dec_canvas = self.dec_dual.get_top_canvas()
+        self.dec_overlay_canvas = self.dec_dual.get_bottom_canvas()
+        self.dec_toolbar = self.dec_dual.get_top_toolbar()
+        self.dec_overlay_toolbar = self.dec_dual.get_bottom_toolbar()
 
-        # Нижний график: наложение децимированного на отфильтрованный
-        self.dec_overlay_canvas = MplCanvas(self, width=10, height=3)
-        layout.addWidget(self.dec_overlay_canvas)
-        self.dec_overlay_toolbar = NavigationToolbar(self.dec_overlay_canvas, self)
-        layout.addWidget(self.dec_overlay_toolbar)
+        # Переименовываем чекбоксы для этой вкладки (опционально)
+        self.dec_dual.show_top_checkbox.setText("Показать выборки")
+        self.dec_dual.show_bottom_checkbox.setText("Показать наложение")
 
     def _plot_decimated_overlay(self):
         ax = self.dec_overlay_canvas.ax
@@ -824,11 +804,6 @@ class MainWindow(QtWidgets.QMainWindow):
                      f'Исходная частота: {self.fs} Гц\n'
                      f'После децимации: {self.fs / self.дек_фактор:.1f} Гц')
 
-        # ax.text(0.02, 0.98, info_text,
-        #         transform=ax.transAxes, fontsize=9,
-        #         verticalalignment='top',
-        #         bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
-
         self.dec_overlay_canvas.draw()
 
     # ---------- Решающее устройство
@@ -842,88 +817,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # ---------- Сравнение
     def _build_compare_tab(self):
+        self.compare_dual = DualPlotWidget(self, title1="Исходная ПСП", title2="Восстановленная ПСП")
         layout = QtWidgets.QVBoxLayout(self.tab_compare)
+        layout.addWidget(self.compare_dual)
 
-        # Полотно 1 – Исходная ПСП
-        self.compare_canvas_orig = MplCanvas(self, width=10, height=3)
-        layout.addWidget(self.compare_canvas_orig)
-        self.compare_toolbar_orig = NavigationToolbar(self.compare_canvas_orig, self)
-        layout.addWidget(self.compare_toolbar_orig)
-
-        # Полотно 2 – Восстановленная
-        self.compare_canvas_rec = MplCanvas(self, width=10, height=3)
-        layout.addWidget(self.compare_canvas_rec)
-        self.compare_toolbar_rec = NavigationToolbar(self.compare_canvas_rec, self)
-        layout.addWidget(self.compare_toolbar_rec)
-
-        # Поле BER
-        # self.ber_label = QtWidgets.QLabel('BER: -')
-        # layout.addWidget(self.ber_label)
-        # Группа для отображения статистики ошибок
-        # stats_group = QtWidgets.QGroupBox("Статистика ошибок")
-        # stats_layout = QtWidgets.QFormLayout()
-        # stats_group.setLayout(stats_layout)
-        #
-        # # Стилизация группы
-        # stats_group.setStyleSheet("""
-        #             QGroupBox {
-        #                 border: 2px solid gray;
-        #                 border-radius: 10px;
-        #                 margin-top: 10px;
-        #                 font-weight: bold;
-        #             }
-        #             QGroupBox:title {
-        #                 subcontrol-origin: margin;
-        #                 subcontrol-position: top center;
-        #                 padding: 5px;
-        #             }
-        #         """)
-        #
-        # # Поля для отображения статистики
-        # self.errors_label = QtWidgets.QLabel('0')
-        # self.errors_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-        # stats_layout.addRow('Количество ошибок:', self.errors_label)
-        #
-        # self.ber_label = QtWidgets.QLabel('0.000000')
-        # self.ber_label.setStyleSheet("color: blue; font-weight: bold; font-size: 14px;")
-        # stats_layout.addRow('BER (Bit Error Rate):', self.ber_label)
-        #
-        # self.total_bits_label = QtWidgets.QLabel('0')
-        # self.total_bits_label.setStyleSheet("font-weight: bold; font-size: 14px;")
-        # stats_layout.addRow('Всего бит:', self.total_bits_label)
-        #
-        # self.accuracy_label = QtWidgets.QLabel('100.00%')
-        # self.accuracy_label.setStyleSheet("color: green; font-weight: bold; font-size: 14px;")
-        # stats_layout.addRow('Точность:', self.accuracy_label)
-        #
-        # layout.addWidget(stats_group)
-        #
-        # layout.addStretch()
-    # def _update_error_stats(self):
-    #     """Обновляет отображение статистики ошибок"""
-    #     # Получаем исходную и восстановленную ПСП
-    #     orig = self.pn_sequence[::self.дек_фактор][:len(self.limited)]
-    #     orig_bits = np.where(orig >= 0, 1, -1)
-    #
-    #     # Считаем ошибки
-    #     errors = np.sum(orig_bits != self.limited)
-    #     total = len(self.limited)
-    #     ber = errors / total if total > 0 else 0
-    #     accuracy = (1 - ber) * 100
-    #
-    #     # Обновляем метки
-    #     self.errors_label.setText(str(errors))
-    #     self.ber_label.setText(f'{ber:.8f}')
-    #     self.total_bits_label.setText(str(total))
-    #     self.accuracy_label.setText(f'{accuracy:.2f}%')
-    #
-    #     # Меняем цвет в зависимости от количества ошибок
-    #     if errors == 0:
-    #         self.errors_label.setStyleSheet("color: green; font-weight: bold; font-size: 14px;")
-    #         self.ber_label.setStyleSheet("color: green; font-weight: bold; font-size: 14px;")
-    #     else:
-    #         self.errors_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-    #         self.ber_label.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
+        self.compare_canvas_orig = self.compare_dual.get_top_canvas()
+        self.compare_canvas_rec = self.compare_dual.get_bottom_canvas()
+        self.compare_toolbar_orig = self.compare_dual.get_top_toolbar()
+        self.compare_toolbar_rec = self.compare_dual.get_bottom_toolbar()
 
     # ---------- Глаз-диаграмма
     def _build_eye_tab(self):
@@ -1534,206 +1435,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if dlg.exec():
             self.trade_data3 = dlg.get_data()
 
-    # def _plot_graph1(self):
-    #     if self.trade_data1 is None or len(self.trade_data1[0]) == 0:
-    #         QtWidgets.QMessageBox.warning(self, "Предупреждение",
-    #                                       "Нет данных для построения графика. Сначала задайте таблицу.")
-    #         return
-    #
-    #     # x, y = self.trade_data1
-    #     x, y = self.trade_data1
-    #
-    #     # Сортировка по x
-    #     # sorted_idx = np.argsort(x)
-    #     # x = x[sorted_idx]
-    #     # y = y[sorted_idx]
-    #     sorted_idx = np.argsort(x)
-    #     x = x[sorted_idx]
-    #     y = y[sorted_idx]
-    #
-    #     ax = self.canvas1.ax
-    #     ax.clear()
-    #
-    #     # Строим график с лейблами
-    #     line, = ax.plot(x, y, 'o-', linewidth=2, markersize=8,
-    #                     label='Экспериментальные точки', color='blue')
-    #
-    #     # Добавляем подписи к точкам (значения)
-    #     for i, (xi, yi) in enumerate(zip(x, y)):
-    #         ax.annotate(f'({xi:.3f}, {yi:.3f})',
-    #                     (xi, yi),
-    #                     textcoords="offset points",
-    #                     xytext=(0, 10),
-    #                     ha='center',
-    #                     fontsize=8,
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
-    #
-    #     # Настройка осей
-    #     ax.set_xlabel("СКО шума", fontsize=12, fontweight='bold')
-    #     ax.set_ylabel("h", fontsize=12, fontweight='bold')
-    #
-    #     # Добавляем заголовок
-    #     ax.set_title('Зависимость h от СКО шума', fontsize=14, fontweight='bold')
-    #
-    #     # Добавляем легенду
-    #     ax.legend(loc='best', fontsize=10)
-    #
-    #     # Добавляем сетку
-    #     ax.grid(True, alpha=0.3)
-    #
-    #     # Добавляем подписи минимальных и максимальных значений
-    #     if len(x) > 0:
-    #         max_idx = np.argmax(y)
-    #         min_idx = np.argmin(y)
-    #
-    #         ax.annotate(f'Max: ({x[max_idx]:.3f}, {y[max_idx]:.3f})',
-    #                     (x[max_idx], y[max_idx]),
-    #                     textcoords="offset points",
-    #                     xytext=(0, -20),
-    #                     ha='center',
-    #                     fontsize=9,
-    #                     color='green',
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-    #
-    #         ax.annotate(f'Min: ({x[min_idx]:.3f}, {y[min_idx]:.3f})',
-    #                     (x[min_idx], y[min_idx]),
-    #                     textcoords="offset points",
-    #                     xytext=(0, 20),
-    #                     ha='center',
-    #                     fontsize=9,
-    #                     color='red',
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
-    #
-    #     self.canvas1.draw()
-    #
-    # def _plot_graph2(self):
-    #     if self.trade_data2 is None or len(self.trade_data2[0]) == 0:
-    #         QtWidgets.QMessageBox.warning(self, "Предупреждение",
-    #                                       "Нет данных для построения графика. Сначала задайте таблицу.")
-    #         return
-    #
-    #     # x, y = self.trade_data2
-    #     sorted_idx = np.argsort(x)
-    #     x = x[sorted_idx]
-    #     y = y[sorted_idx]
-    #
-    #     ax = self.canvas2.ax
-    #     ax.clear()
-    #
-    #     # Строим график с лейблами
-    #     line, = ax.plot(x, y, 's-', linewidth=2, markersize=8,
-    #                     label='Экспериментальные точки', color='red')
-    #
-    #     # Добавляем подписи к точкам (значения)
-    #     for i, (xi, yi) in enumerate(zip(x, y)):
-    #         ax.annotate(f'({xi:.3f}, {yi:.3f})',
-    #                     (xi, yi),
-    #                     textcoords="offset points",
-    #                     xytext=(0, 10),
-    #                     ha='center',
-    #                     fontsize=8,
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
-    #
-    #     # Настройка осей
-    #     ax.set_xlabel("Δφ (разность фаз)", fontsize=12, fontweight='bold')
-    #     ax.set_ylabel("h", fontsize=12, fontweight='bold')
-    #
-    #     # Добавляем заголовок
-    #     ax.set_title('Зависимость h от разности фаз', fontsize=14, fontweight='bold')
-    #
-    #     # Добавляем легенду
-    #     ax.legend(loc='best', fontsize=10)
-    #
-    #     # Добавляем сетку
-    #     ax.grid(True, alpha=0.3)
-    #
-    #     # Добавляем подписи минимальных и максимальных значений
-    #     if len(x) > 0:
-    #         max_idx = np.argmax(y)
-    #         min_idx = np.argmin(y)
-    #
-    #         ax.annotate(f'Max: ({x[max_idx]:.3f}, {y[max_idx]:.3f})',
-    #                     (x[max_idx], y[max_idx]),
-    #                     textcoords="offset points",
-    #                     xytext=(0, -20),
-    #                     ha='center',
-    #                     fontsize=9,
-    #                     color='green',
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-    #
-    #         ax.annotate(f'Min: ({x[min_idx]:.3f}, {y[min_idx]:.3f})',
-    #                     (x[min_idx], y[min_idx]),
-    #                     textcoords="offset points",
-    #                     xytext=(0, 20),
-    #                     ha='center',
-    #                     fontsize=9,
-    #                     color='red',
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
-    #
-    #     self.canvas2.draw()
-    #
-    # def _plot_graph3(self):
-    #     if self.trade_data3 is None or len(self.trade_data3[0]) == 0:
-    #         QtWidgets.QMessageBox.warning(self, "Предупреждение",
-    #                                       "Нет данных для построения графика. Сначала задайте таблицу.")
-    #         return
-    #
-    #     x, y = self.trade_data3
-    #
-    #     ax = self.canvas3.ax
-    #     ax.clear()
-    #
-    #     # Строим график с лейблами
-    #     line, = ax.plot(x, y, '^-', linewidth=2, markersize=8,
-    #                     label='Экспериментальные точки', color='green')
-    #
-    #     # Добавляем подписи к точкам (значения)
-    #     for i, (xi, yi) in enumerate(zip(x, y)):
-    #         ax.annotate(f'({xi:.3f}, {yi:.3f})',
-    #                     (xi, yi),
-    #                     textcoords="offset points",
-    #                     xytext=(0, 10),
-    #                     ha='center',
-    #                     fontsize=8,
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='yellow', alpha=0.7))
-    #
-    #     # Настройка осей
-    #     ax.set_xlabel("Δφ (разность фаз)", fontsize=12, fontweight='bold')
-    #     ax.set_ylabel("СКО шума", fontsize=12, fontweight='bold')
-    #
-    #     # Добавляем заголовок
-    #     ax.set_title('Диаграмма обмена', fontsize=14, fontweight='bold')
-    #
-    #     # Добавляем легенду
-    #     ax.legend(loc='best', fontsize=10)
-    #
-    #     # Добавляем сетку
-    #     ax.grid(True, alpha=0.3)
-    #
-    #     # Добавляем подписи минимальных и максимальных значений
-    #     if len(x) > 0:
-    #         max_idx = np.argmax(y)
-    #         min_idx = np.argmin(y)
-    #
-    #         ax.annotate(f'Max: ({x[max_idx]:.3f}, {y[max_idx]:.3f})',
-    #                     (x[max_idx], y[max_idx]),
-    #                     textcoords="offset points",
-    #                     xytext=(0, -20),
-    #                     ha='center',
-    #                     fontsize=9,
-    #                     color='green',
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-    #
-    #         ax.annotate(f'Min: ({x[min_idx]:.3f}, {y[min_idx]:.3f})',
-    #                     (x[min_idx], y[min_idx]),
-    #                     textcoords="offset points",
-    #                     xytext=(0, 20),
-    #                     ha='center',
-    #                     fontsize=9,
-    #                     color='red',
-    #                     bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
-    #
-    #     self.canvas3.draw()
+
     def _plot_graph1(self):
         if self.trade_data1 is None or len(self.trade_data1[0]) == 0:
             QtWidgets.QMessageBox.warning(self, "Предупреждение",
@@ -1776,29 +1478,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Добавляем сетку
         ax.grid(True, alpha=0.3)
-
-        # # Добавляем подписи минимальных и максимальных значений
-        # if len(x_sorted) > 0:
-        #     max_idx = np.argmax(y_sorted)
-        #     min_idx = np.argmin(y_sorted)
-        #
-        #     ax.annotate(f'Max: ({x_sorted[max_idx]:.3f}, {y_sorted[max_idx]:.3f})',
-        #                 (x_sorted[max_idx], y_sorted[max_idx]),
-        #                 textcoords="offset points",
-        #                 xytext=(0, -20),
-        #                 ha='center',
-        #                 fontsize=9,
-        #                 color='green',
-        #                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-        #
-        #     ax.annotate(f'Min: ({x_sorted[min_idx]:.3f}, {y_sorted[min_idx]:.3f})',
-        #                 (x_sorted[min_idx], y_sorted[min_idx]),
-        #                 textcoords="offset points",
-        #                 xytext=(0, 20),
-        #                 ha='center',
-        #                 fontsize=9,
-        #                 color='red',
-        #                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
 
         self.canvas1.draw()
 
@@ -1846,28 +1525,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Добавляем сетку
         ax.grid(True, alpha=0.3)
 
-        # # Добавляем подписи минимальных и максимальных значений
-        # if len(x_sorted) > 0:
-        #     max_idx = np.argmax(y_sorted)
-        #     min_idx = np.argmin(y_sorted)
-        #
-        #     ax.annotate(f'Max: ({x_sorted[max_idx]:.3f}, {y_sorted[max_idx]:.3f})',
-        #                 (x_sorted[max_idx], y_sorted[max_idx]),
-        #                 textcoords="offset points",
-        #                 xytext=(0, -20),
-        #                 ha='center',
-        #                 fontsize=9,
-        #                 color='green',
-        #                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-        #
-        #     ax.annotate(f'Min: ({x_sorted[min_idx]:.3f}, {y_sorted[min_idx]:.3f})',
-        #                 (x_sorted[min_idx], y_sorted[min_idx]),
-        #                 textcoords="offset points",
-        #                 xytext=(0, 20),
-        #                 ha='center',
-        #                 fontsize=9,
-        #                 color='red',
-        #                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
 
         self.canvas2.draw()
 
@@ -1914,28 +1571,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Добавляем сетку
         ax.grid(True, alpha=0.3)
 
-        # # Добавляем подписи минимальных и максимальных значений
-        # if len(x_sorted) > 0:
-        #     max_idx = np.argmax(y_sorted)
-        #     min_idx = np.argmin(y_sorted)
-        #
-        #     ax.annotate(f'Max: ({x_sorted[max_idx]:.3f}, {y_sorted[max_idx]:.3f})',
-        #                 (x_sorted[max_idx], y_sorted[max_idx]),
-        #                 textcoords="offset points",
-        #                 xytext=(0, -20),
-        #                 ha='center',
-        #                 fontsize=9,
-        #                 color='green',
-        #                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightgreen', alpha=0.7))
-        #
-        #     ax.annotate(f'Min: ({x_sorted[min_idx]:.3f}, {y_sorted[min_idx]:.3f})',
-        #                 (x_sorted[min_idx], y_sorted[min_idx]),
-        #                 textcoords="offset points",
-        #                 xytext=(0, 20),
-        #                 ha='center',
-        #                 fontsize=9,
-        #                 color='red',
-        #                 bbox=dict(boxstyle='round,pad=0.3', facecolor='lightcoral', alpha=0.7))
 
         self.canvas3.draw()
     # ---------- Отдельные функции рисования графиков
@@ -2125,81 +1760,7 @@ class MainWindow(QtWidgets.QMainWindow):
         ax2.grid(True)
         self.compare_canvas_rec.draw()
 
-        # Обновляем BER
-        # self.ber_label.setText(f'BER: {self.ber:.6e}   E_b/N_0: {self.eb_no:.2f} dB')
-        # Обновляем статистику ошибок
-        # self._update_error_stats()
 
-    # ---------- Глаз-диаграмма (с использованием SpinBox вместо слайдеров)
-    # def _update_eye_diagram(self):
-    #     # Получаем параметры из интерфейса
-    #     phase = float(self.eye_phase.value()) * np.pi / 180.0
-    #     phase_op = float(self.eye_phase_op.value()) * np.pi / 180.0
-    #     noise_std = float(self.eye_noise.value())
-    #
-    #     # Основные параметры (как в исходном коде)
-    #     num_realizations = int(self.eye_realizations.value())
-    #     fs = self.fs
-    #     pn_rate = self.пс_частота
-    #     N = self.N
-    #     t = self.t
-    #
-    #     # Временные параметры для сегмента (как в исходном коде)
-    #     start_time = 0.035  # Начало интервала в секундах
-    #     end_time = 2.2  # Конец интервала в секундах
-    #
-    #     start_idx = int(start_time * fs)
-    #     end_idx = int(end_time * fs)
-    #
-    #     samples_per_symbol = int(fs / pn_rate)
-    #     t_symbol = np.linspace(0, 1 / pn_rate, samples_per_symbol, endpoint=False)
-    #
-    #     ax = self.eye_canvas.ax
-    #     ax.clear()
-    #
-    #     # Цвета для разных реализаций (как в исходном коде)
-    #     colors = plt.cm.viridis(np.linspace(0, 1, num_realizations))
-    #
-    #     for realization_idx in range(num_realizations):
-    #         # Генерация сигналов (ПОВТОРЯЕМ ЛОГИКУ ИСХОДНОГО КОДА)
-    #
-    #         # 1. Генерация несущей с заданной фазой
-    #         sinusoid_1 = generate_sinusoid(self.частота_опорного, phase, fs, N)
-    #
-    #         # 2. Модуляция (умножение ПСП на несущую)
-    #         multiplied_signal = self.pn_sequence * sinusoid_1
-    #
-    #         # 3. Добавление шума
-    #         noisy_signal = add_gaussian_noise(multiplied_signal, noise_std, 0)
-    #
-    #         # 4. Генерация опорного колебания
-    #         reference_oscillation = generate_sinusoid(self.частота_опорного, phase_op, fs, N)
-    #
-    #         # 5. Демодуляция (перемножение)
-    #         mixed_signal = noisy_signal * reference_oscillation
-    #
-    #         # 6. Фильтрация ФНЧ
-    #         filtered_signal = butter_lowpass_filter(mixed_signal, self.фильтр_срез, fs, order=3)
-    #
-    #         # 7. Выделение сегмента для глаз-диаграммы
-    #         filtered_signal_segment = filtered_signal[start_idx:end_idx]
-    #
-    #         # 8. Построение глаз-диаграммы (ОСНОВНАЯ ЧАСТЬ)
-    #         for i in range(0, len(filtered_signal_segment) - samples_per_symbol, samples_per_symbol):
-    #             ax.plot(t_symbol, filtered_signal_segment[i:i + samples_per_symbol],
-    #                     color=colors[realization_idx], linewidth=0.5)
-    #
-    #     # Настройка графика (как в исходном коде)
-    #     ax.set_title('Глаз-диаграмма')
-    #     ax.set_xlabel('Время [с]')
-    #     ax.set_ylabel('Амплитуда')
-    #
-    #     # Увеличение размера чисел сетки (как в исходном коде)
-    #     ax.tick_params(axis='both', which='major', labelsize=14)
-    #     ax.tick_params(axis='both', which='minor', labelsize=10)
-    #     ax.grid(True)
-    #
-    #     self.eye_canvas.draw()
     def _update_eye_diagram(self):
         # Блокируем интерфейс
         self.set_controls_enabled(False)

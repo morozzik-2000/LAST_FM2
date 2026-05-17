@@ -9,6 +9,223 @@ import matplotlib.pyplot as plt
 plt.rcParams['figure.max_open_warning'] = 50  # Увеличиваем лимит
 
 
+class OverlayGraphDialog(QtWidgets.QDialog):
+    """Диалог для выбора графиков для наложения"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Совмещение графиков")
+        self.resize(500, 600)
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        # Инструкция
+        instruction = QtWidgets.QLabel("Выберите графики для наложения:")
+        instruction.setFont(QtGui.QFont("Arial", 12, QtGui.QFont.Weight.Bold))
+        layout.addWidget(instruction)
+
+        # Создаем scroll area без группы
+        scroll_area = QtWidgets.QScrollArea()
+        scroll_widget = QtWidgets.QWidget()
+        scroll_layout = QtWidgets.QVBoxLayout(scroll_widget)
+
+        self.parent_main = parent
+
+        # Список всех графиков с прямыми ссылками на данные
+        self.graphs_info = [
+            ("Информационная последовательность (ПСП) ", self._get_psp_data, "step"),
+            ("Спектральная плотность мощности ПСП", self._get_psp_psd_data, "line"),
+            ("Немодулированная несущая", self._get_op_data, "line"),
+            ("СПМ немодулированной несущей", self._get_op_psd_data, "line"),
+            ("Модулированный сигнал 2ФМ", self._get_mod_data, "line"),
+            ("СПМ модулированного сигнала 2ФМ", self._get_mod_psd_data, "line"),
+            ("Процесс на выходе канала", self._get_chan_data, "line"),
+            ("СПМ процесса на выходе канала", self._get_chan_psd_data, "line"),
+            ("Процесс на выходе перемножителя", self._get_dem_data, "line"),
+            ("СПМ процесса на выходе перемножителя", self._get_dem_psd_data, "line"),
+            ("Процесс на выходе ФНЧ", self._get_lpf_data, "line"),
+            ("СПМ процесса на выходе ФНЧ", self._get_lpf_psd_data, "line"),
+            ("Выборка процесса на выходе ФНЧ", self._get_dec_data, "line"),
+            ("Выход демодулятора (решающего устройства)", self._get_decider_data, "step"),
+            # ("Исходная ПСП", self._get_compare_orig_data, "step"),
+            ("Восстановленная ПСП", self._get_compare_rec_data, "step"),
+        ]
+
+        self.checkboxes = {}
+
+        for name, get_func, plot_type in self.graphs_info:
+            cb = QtWidgets.QCheckBox(name)
+            cb.get_data_func = lambda f=get_func, t=plot_type: (f(), t)
+            scroll_layout.addWidget(cb)
+            self.checkboxes[name] = cb
+
+        scroll_widget.setLayout(scroll_layout)
+        scroll_area.setWidget(scroll_widget)
+        scroll_area.setWidgetResizable(True)
+        layout.addWidget(scroll_area)
+
+        # Кнопки
+        btn_layout = QtWidgets.QHBoxLayout()
+
+        self.btn_plot = QtWidgets.QPushButton("Построить наложение")
+        self.btn_plot.clicked.connect(self.accept)
+        self.btn_plot.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+
+        btn_cancel = QtWidgets.QPushButton("Отмена")
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_deselect_all = QtWidgets.QPushButton("Снять все")
+        btn_deselect_all.clicked.connect(self._deselect_all)
+        btn_deselect_all.setStyleSheet("""
+            QPushButton {
+                background-color: #f44336;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+            }
+            QPushButton:hover {
+                background-color: #d32f2f;
+            }
+        """)
+
+        btn_layout.addWidget(btn_deselect_all)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_plot)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+
+    def _select_all(self):
+        """Выбирает все чекбоксы"""
+        for cb in self.checkboxes.values():
+            cb.setChecked(True)
+
+    def _deselect_all(self):
+        """Снимает все чекбоксы"""
+        for cb in self.checkboxes.values():
+            cb.setChecked(False)
+
+    # Остальные методы _get_psp_data, _get_psp_psd_data и т.д. остаются без изменений
+    def _get_psp_data(self):
+        if hasattr(self.parent_main, 't') and hasattr(self.parent_main, 'pn_sequence'):
+            return self.parent_main.t, self.parent_main.pn_sequence, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_psp_psd_data(self):
+        if hasattr(self.parent_main, 'pn_sequence') and hasattr(self.parent_main, 'fs'):
+            f, P = compute_psd(self.parent_main.pn_sequence, self.parent_main.fs)
+            return f, P, 'Частота, Гц', ''
+        return None, None, "", ""
+
+    def _get_op_data(self):
+        if hasattr(self.parent_main, 't') and hasattr(self.parent_main, 'sinusoid'):
+            return self.parent_main.t, self.parent_main.sinusoid, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_op_psd_data(self):
+        if hasattr(self.parent_main, 'sinusoid') and hasattr(self.parent_main, 'fs'):
+            f, P = compute_psd(self.parent_main.sinusoid, self.parent_main.fs)
+            return f, P, 'Частота, Гц', ''
+        return None, None, "", ""
+
+    def _get_mod_data(self):
+        if hasattr(self.parent_main, 't') and hasattr(self.parent_main, 'multiplied'):
+            return self.parent_main.t, self.parent_main.multiplied, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_mod_psd_data(self):
+        if hasattr(self.parent_main, 'multiplied') and hasattr(self.parent_main, 'fs'):
+            f, P = compute_psd(self.parent_main.multiplied, self.parent_main.fs)
+            return f, P, 'Частота, Гц', ''
+        return None, None, "", ""
+
+    def _get_chan_data(self):
+        if hasattr(self.parent_main, 't') and hasattr(self.parent_main, 'noisy'):
+            return self.parent_main.t, self.parent_main.noisy, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_chan_psd_data(self):
+        if hasattr(self.parent_main, 'noisy') and hasattr(self.parent_main, 'fs'):
+            f, P = compute_psd(self.parent_main.noisy, self.parent_main.fs)
+            return f, P, 'Частота, Гц', ''
+        return None, None, "", ""
+
+    def _get_dem_data(self):
+        if hasattr(self.parent_main, 't') and hasattr(self.parent_main, 'mixed'):
+            return self.parent_main.t, self.parent_main.mixed, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_dem_psd_data(self):
+        if hasattr(self.parent_main, 'mixed') and hasattr(self.parent_main, 'fs'):
+            f, P = compute_psd(self.parent_main.mixed, self.parent_main.fs)
+            return f, P, 'Частота, Гц', ''
+        return None, None, "", ""
+
+    def _get_lpf_data(self):
+        if hasattr(self.parent_main, 't') and hasattr(self.parent_main, 'filtered'):
+            return self.parent_main.t, self.parent_main.filtered, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_lpf_psd_data(self):
+        if hasattr(self.parent_main, 'filtered') and hasattr(self.parent_main, 'fs'):
+            f, P = compute_psd(self.parent_main.filtered, self.parent_main.fs)
+            return f, P, 'Частота, Гц', ''
+        return None, None, "", ""
+
+    def _get_dec_data(self):
+        if hasattr(self.parent_main, 'decimated_t') and hasattr(self.parent_main, 'decimated'):
+            return self.parent_main.decimated_t, self.parent_main.decimated, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_decider_data(self):
+        if hasattr(self.parent_main, 'decimated_t') and hasattr(self.parent_main, 'limited'):
+            return self.parent_main.decimated_t, self.parent_main.limited, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_compare_orig_data(self):
+        if hasattr(self.parent_main, 'decimated_t') and hasattr(self.parent_main, 'pn_sequence') and hasattr(
+                self.parent_main, 'дек_фактор'):
+            L = min(len(self.parent_main.pn_sequence[::self.parent_main.дек_фактор]),
+                    len(self.parent_main.limited) if hasattr(self.parent_main, 'limited') else 999999)
+            t = self.parent_main.decimated_t[:L]
+            orig = self.parent_main.pn_sequence[::self.parent_main.дек_фактор][:L]
+            return t, orig, 'Время, c', ''
+        return None, None, "", ""
+
+    def _get_compare_rec_data(self):
+        if hasattr(self.parent_main, 'decimated_t') and hasattr(self.parent_main, 'limited'):
+            L = min(len(self.parent_main.limited),
+                    len(self.parent_main.pn_sequence[::self.parent_main.дек_фактор]) if hasattr(self.parent_main,
+                                                                                                'pn_sequence') else 999999)
+            t = self.parent_main.decimated_t[:L]
+            return t, self.parent_main.limited[:L], 'Время, c', ''
+        return None, None, "", ""
+
+    def get_selected_graphs(self):
+        """Возвращает список выбранных графиков с их данными"""
+        selected = []
+        for name, cb in self.checkboxes.items():
+            if cb.isChecked():
+                data, plot_type = cb.get_data_func()
+                if data[0] is not None and data[1] is not None:
+                    selected.append({
+                        'name': name,
+                        'x': data[0],
+                        'y': data[1],
+                        'xlabel': data[2],
+                        'ylabel': data[3],
+                        'plot_type': plot_type
+                    })
+        return selected
 # Добавьте этот класс-обертку для управления видимостью графиков
 class DualPlotWidget(QtWidgets.QWidget):
     """Виджет с двумя графиками и возможностью скрывать/показывать каждый"""
@@ -28,6 +245,26 @@ class DualPlotWidget(QtWidgets.QWidget):
 
         control_panel.addWidget(self.show_top_checkbox)
         control_panel.addWidget(self.show_bottom_checkbox)
+
+        # Добавляем кнопку наложения графиков
+        self.overlay_btn = QtWidgets.QPushButton("📊 Совместить графики")
+        self.overlay_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                font-weight: bold;
+                padding: 5px 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        # Подключаем сигнал к родительскому окну
+        if parent and hasattr(parent, '_show_overlay_dialog'):
+            self.overlay_btn.clicked.connect(parent._show_overlay_dialog)
+
+        control_panel.addWidget(self.overlay_btn)
         control_panel.addStretch()
 
         layout.addLayout(control_panel)
@@ -396,7 +633,6 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle('Формирование и демодуляция сигналов ФМ2')
         self.resize(1200, 800)
-
         # ---------- Параметры моделирования (по умолчанию)
         self.пс_частота = 10      # pn_rate
         self.fs = 2000            # частота дискретизации
@@ -405,12 +641,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.частота_опорного = 200
         self.фаза = 0.0
         self.фаза_оп = 0.0
-        self.шум_std = 2.0
+        self.шум_std = 0.0
         self.порог_решения = 0.0
         # self.дек_фактор = 200
         self.дек_фактор = int(round(self.fs / self.пс_частота)) if self.пс_частота > 0 else 1
         self.фильтр_срез = 10
-
+        self.t = None  # Будет заполнено после моделирования
         # Основной виджет и табы
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -515,6 +751,139 @@ class MainWindow(QtWidgets.QMainWindow):
         """)
         layout.addWidget(self.progress_bar)
 
+    def _build_overlay_button(self, parent_layout):
+        """Добавляет кнопку наложения графиков в DualPlotWidget"""
+        # Создаем кнопку рядом с чекбоксами
+        self.overlay_btn = QtWidgets.QPushButton("📊 Наложить графики")
+        self.overlay_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                font-weight: bold;
+                padding: 5px 10px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+        """)
+        self.overlay_btn.clicked.connect(self._show_overlay_dialog)
+
+        # Добавляем кнопку в нужное место (например, в параметры)
+        if hasattr(self, 'tab_params'):
+            # Ищем layout в tab_params для добавления кнопки
+            for child in self.tab_params.children():
+                if isinstance(child, QtWidgets.QVBoxLayout):
+                    # Добавляем кнопку перед stretch
+                    child.insertWidget(child.count() - 1, self.overlay_btn)
+                    break
+
+    def _show_overlay_dialog(self):
+        """Показывает диалог выбора графиков для наложения"""
+        # Проверяем, были ли сгенерированы данные
+        if not hasattr(self, 't') or self.t is None:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Предупреждение",
+                "Сначала выполните моделирование!\n\n"
+                "Нажмите кнопку 'Применить параметры и пересчитать' для генерации сигналов."
+            )
+            return
+
+        # Дополнительная проверка на наличие основных массивов данных
+        if not hasattr(self, 'pn_sequence') or self.pn_sequence is None:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Предупреждение",
+                "Данные не сгенерированы!\n\n"
+                "Пожалуйста, нажмите кнопку 'Применить параметры и пересчитать' для начала моделирования."
+            )
+            return
+
+        dialog = OverlayGraphDialog(self)
+        if dialog.exec():
+            selected_graphs = dialog.get_selected_graphs()
+            if len(selected_graphs) < 2:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Предупреждение",
+                    "Выберите хотя бы два графика для наложения!"
+                )
+                return
+
+            self._plot_overlay_graphs(selected_graphs)
+
+
+    def _plot_overlay_graphs(self, graphs):
+        """Строит наложение выбранных графиков в новом окне"""
+        # Создаем диалог с графиком
+        overlay_dialog = QtWidgets.QDialog(self)
+        overlay_dialog.setWindowTitle("Наложение графиков")
+        overlay_dialog.resize(900, 600)
+
+        layout = QtWidgets.QVBoxLayout(overlay_dialog)
+
+        # Создаем canvas для графика
+        canvas = MplCanvas(overlay_dialog, width=10, height=6)
+        layout.addWidget(canvas)
+
+        # Добавляем тулбар
+        toolbar = NavigationToolbar(canvas, overlay_dialog)
+        layout.addWidget(toolbar)
+
+        # Кнопка закрытия
+        btn_close = QtWidgets.QPushButton("Закрыть")
+        btn_close.clicked.connect(overlay_dialog.accept)
+        layout.addWidget(btn_close)
+
+        # Рисуем графики
+        ax = canvas.ax
+        ax.clear()
+
+        # Цветовая палитра для разных графиков
+        colors = ['blue', 'red', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+        line_styles = ['-', '--', '-.', ':', '-', '--', '-.', ':', '-', '--']
+
+        for idx, graph in enumerate(graphs):
+            color = colors[idx % len(colors)]
+            line_style = line_styles[idx % len(line_styles)]
+
+            x_data = graph['x']
+            y_data = graph['y']
+
+            # Не прореживаем данные, используем все точки
+            # Но если данных слишком много для отображения, можно показать сообщение
+            print(f"График {graph['name']}: {len(x_data)} точек")
+
+            # Выбираем стиль отображения в зависимости от типа графика
+            if graph['plot_type'] == 'step':
+                ax.step(x_data, y_data, where='post',
+                        color=color, linewidth=1.0,
+                        label=f"{graph['name']}", alpha=0.8)
+            else:
+                ax.plot(x_data, y_data,
+                        color=color,
+                        linestyle=line_style,
+                        linewidth=1.0,
+                        label=f"{graph['name']}",
+                        alpha=0.8,
+                        rasterized=False)  # Отключаем растеризацию
+
+        # Настройка графика
+        first_graph = graphs[0]
+        ax.set_xlabel(first_graph['xlabel'] if first_graph['xlabel'] else 'X')
+        ax.set_ylabel('')
+        ax.set_title('Наложение графиков')
+        ax.legend(loc='best', fontsize=8, framealpha=0.9)
+        ax.grid(True, alpha=0.3)
+
+        # Автоматически масштабируем оси
+        ax.relim()
+        ax.autoscale_view()
+
+        canvas.draw()
+
+        overlay_dialog.exec()
 
     def set_controls_enabled(self, enabled):
         """Блокирует/разблокирует элементы управления"""
@@ -598,7 +967,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_fs.setRange(100, 200000)
         self.input_fs.setValue(self.fs)
         self.input_fs.setFont(spin_font)
-        lbl_fs = QtWidgets.QLabel('Частота дискретизации [Гц]:')
+        lbl_fs = QtWidgets.QLabel('Частота дискретизации, Гц:')
         lbl_fs.setFont(label_font)
 
 
@@ -608,7 +977,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_T.setValue(self.длительность)
         self.input_T.setDecimals(0)
         self.input_T.setFont(spin_font)
-        lbl_T = QtWidgets.QLabel('Длина реализации [с]:')
+        lbl_T = QtWidgets.QLabel('Длина реализации, с:')
         lbl_T.setFont(label_font)
 
 
@@ -617,7 +986,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_pn.setRange(1, 1000)
         self.input_pn.setValue(self.пс_частота)
         self.input_pn.setFont(spin_font)
-        lbl_pn = QtWidgets.QLabel('Частота ПСП [Гц]:')
+        lbl_pn = QtWidgets.QLabel('Частота ПСП, Гц:')
         lbl_pn.setFont(label_font)
 
 
@@ -626,7 +995,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_freq.setRange(1, 50000)
         self.input_freq.setValue(self.частота_опорного)
         self.input_freq.setFont(spin_font)
-        lbl_freq = QtWidgets.QLabel('Частота несущей [Гц]:')
+        lbl_freq = QtWidgets.QLabel('Частота несущей, Гц:')
         lbl_freq.setFont(label_font)
 
 
@@ -646,7 +1015,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_phase_op.setValue(self.фаза_оп)
         self.input_phase_op.setDecimals(0)
         self.input_phase_op.setFont(spin_font)
-        lbl_phase_op = QtWidgets.QLabel('Фаза несущей [градусы]:')
+        lbl_phase_op = QtWidgets.QLabel('Фаза несущей, град.:')
 
 
 
@@ -656,7 +1025,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_noise.setDecimals(1)
         self.input_noise.setValue(self.шум_std)
         self.input_noise.setFont(spin_font)
-        lbl_noise = QtWidgets.QLabel('СКО шума:')
+        lbl_noise = QtWidgets.QLabel('СКО шума, В:')
         lbl_noise.setFont(label_font)
 
         # Частота среза ФНЧ
@@ -665,7 +1034,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.input_cut.setDecimals(0)
         self.input_cut.setValue(self.фильтр_срез)
         self.input_cut.setFont(spin_font)
-        lbl_cut = QtWidgets.QLabel('Полоса пропускания ФНЧ [Гц]:')
+        lbl_cut = QtWidgets.QLabel('Полоса пропускания ФНЧ, Гц:')
         lbl_cut.setFont(label_font)
 
 
@@ -702,6 +1071,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # ---------- Сцена для схемы блоков
         self.scene_view = QtWidgets.QGraphicsView()
         self.scene_view.setMinimumHeight(260)
+        self.scene_view.setStyleSheet("background-color: transparent; border: 1px solid #ccc; border-radius: 5px;")
         layout.addWidget(self.scene_view)
 
     def _build_psp_tab(self):
@@ -835,7 +1205,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addLayout(controls)
 
         # Фаза сигнала
-        phase_label = QtWidgets.QLabel('Фаза сигнала [градусы]:')
+        phase_label = QtWidgets.QLabel('Фаза сигнала, град.:')
         controls.addWidget(phase_label)
         self.eye_phase = QtWidgets.QDoubleSpinBox()
         self.eye_phase.setRange(0, 360)
@@ -859,7 +1229,7 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.addSpacing(90)
 
         # СКО шума
-        noise_label = QtWidgets.QLabel('СКО шума:')
+        noise_label = QtWidgets.QLabel('СКО шума, В:')
         controls.addWidget(noise_label)
         self.eye_noise = QtWidgets.QDoubleSpinBox()
         self.eye_noise.setRange(0.0, 100.0)
@@ -872,12 +1242,12 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.addSpacing(90)
 
         # Длина реализации
-        realizations_label = QtWidgets.QLabel('Длина реализации:')
+        realizations_label = QtWidgets.QLabel('Длина реализации, символов:')
         controls.addWidget(realizations_label)
         self.eye_realizations = QtWidgets.QSpinBox()
         self.eye_realizations.setRange(1, 1000)
         self.eye_realizations.setValue(10)
-        self.eye_realizations.setSuffix(' символов')
+        # self.eye_realizations.setSuffix(' символов')
         self.eye_realizations.setObjectName("wide_spinbox")  # 👈 ДОБАВЬТЕ ЭТУ СТРОКУ
         controls.addWidget(self.eye_realizations)
 
@@ -1034,9 +1404,14 @@ class MainWindow(QtWidgets.QMainWindow):
     # ---------- Рисуем блок-схему в QGraphicsScene (новая, аккуратная)
     def _draw_block_diagram(self):
         scene = QtWidgets.QGraphicsScene()
+        scene.setBackgroundBrush(QtGui.QBrush(QtCore.Qt.GlobalColor.transparent))
         # Уменьшил высоту сцены чтобы убрать лишнее пространство снизу
+        scene = QtWidgets.QGraphicsScene()
         scene.setSceneRect(0, 0, 1100, 300)
+        scene.setBackgroundBrush(QtGui.QBrush(QtCore.Qt.GlobalColor.transparent))  # Добавить эту строку
         self.scene_view.setScene(scene)
+        self.scene_view.setStyleSheet(
+            "background-color: transparent; border: 1px solid #ccc; border-radius: 5px;")  # Добавить эту строку
 
 
         # Жирное перо для стрелок и рамок
@@ -1960,7 +2335,7 @@ if __name__ == '__main__':
             font-size: 15px;
             font-weight: bold;
             min-height: 12px;
-            min-width: 80px;
+            min-width: 40px;
         }
 
         /* Текст внутри спинбокса */
@@ -2034,7 +2409,7 @@ if __name__ == '__main__':
 
         /* Стиль только для спинбокса "Длина реализации" */
         QSpinBox#wide_spinbox {
-            min-width: 120px;
+            min-width: 40px;
             padding: 2px 8px;
         }
         
